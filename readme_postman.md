@@ -1,4 +1,4 @@
-# Guia de pruebas API con Postman
+﻿# Guia de pruebas API con Postman
 
 Esta guia explica como validar los endpoints principales del Backend TJ desde Postman. El script `scripts/seed.js` crea datos de demostracion consistentes para autenticacion, catalogo de beneficios, tarjetahabientes y solicitudes de registro; los ejemplos de este documento usan exactamente esos valores.
 

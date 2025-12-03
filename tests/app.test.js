@@ -1,4 +1,4 @@
-const request = require('supertest');
+﻿const request = require('supertest');
 
 // Mockear la capa de base de datos para no depender de MySQL en las pruebas
 jest.mock('../src/config/db', () => {

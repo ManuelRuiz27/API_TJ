@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+﻿const jwt = require('jsonwebtoken');
 
 // Middleware para verificar el token JWT
 // Almacena el id del usuario autenticado en req.user (p.ej. { id: 1 })

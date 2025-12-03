@@ -1,4 +1,4 @@
-services:
+﻿services:
   db:
     image: mysql:8.0
     environment:

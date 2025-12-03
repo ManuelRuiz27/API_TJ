@@ -1,4 +1,4 @@
-// middleware para verificar JWT
+﻿// middleware para verificar JWT
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 

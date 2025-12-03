@@ -1,4 +1,4 @@
-# Backend API - Tarjeta Joven
+﻿# Backend API - Tarjeta Joven
 
 Esqueleto inicial de la API de Tarjeta Joven construido con Node.js, Express y MySQL. Incluye rutas para autenticacion, registro y consulta de catalogos.
 
