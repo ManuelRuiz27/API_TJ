@@ -1,28 +1,48 @@
-﻿# Backend API - Tarjeta Joven
+# Backend API - Tarjeta Joven
 
-Esqueleto inicial de la API de Tarjeta Joven construido con Node.js, Express y MySQL. Incluye rutas para autenticacion, registro y consulta de catalogos.
+API de referencia para el programa Tarjeta Joven. Expone flujos de autenticacion (password y OTP), consulta de catalogos, registro de ciudadanos sin tarjeta fisica y vinculacion de tarjetas ya emitidas sobre Node.js + Express + MySQL.
+
+## Caracteristicas clave
+
+- Autenticacion basada en JWT con refresh tokens persistidos en `refresh_tokens`.
+- Flujo OTP autodocumentado para QA local (el codigo se devuelve en la respuesta) y auditoria en `cardholder_audit_logs`.
+- Registro multipart/form-data con validaciones reforzadas de CURP (incluyendo consistencia con la fecha de nacimiento y limite de edad de 29 años cumplidos al momento del tramite), direccion y campos personales. Los documentos adjuntos ya no son obligatorios.
+- Catalogo de beneficios filtrable por municipio, categoria y texto libre.
+- Script de seed que crea el esquema completo y datos de prueba consistentes.
+
+## Arquitectura rapida
+
+| Componente | Descripcion |
+|------------|-------------|
+| `src/index.js` | Inicializa Express, CORS y monta las rutas versionadas bajo `/api/v1`. |
+| `src/config/db.js` | Pool MySQL (`mysql2/promise`) reutilizado por los controladores. |
+| `src/routes/*` | Define routers por dominio (`auth`, `user`, `catalog`, `register`, `cardholders`). |
+| `src/controllers/*` | Logica de cada flujo: tokens, OTP, catalogo, registro y cardholders. |
+| `src/middleware/auth.js` | Middleware que valida JWT y expone `req.user`. |
+| `scripts/seed.js` | Asegura el esquema y siembra municipios, categorias, beneficios, usuarios, cardholders y solicitudes. |
+| `uploads/` | Carpeta (o volumen) donde `multer` guarda, de forma opcional, los adjuntos del registro si se envian. |
+| `tests/` | Base para pruebas Jest + Supertest. |
 
 ## Requisitos previos
 
-- Node.js 22.x y npm 10.x (solo si correras el proyecto fuera de Docker).
-- Docker Desktop (o Docker Engine + Docker Compose v2).
-- Acceso a una instancia de MySQL 8 si decides no usar el contenedor `db` incluido.
-
-## Estructura principal
-
-- `src/index.js`: arranca Express, configura CORS y monta las rutas.
-- `src/config/db.js`: pool de conexiones MySQL usando `mysql2/promise`.
-- `src/routes/` y `src/controllers/`: modulos por dominio (`auth`, `user`, `catalog`, `register`).
-- `uploads/`: almacenamiento temporal para archivos subidos (mapeado como volumen en Docker).
-- `tests/`: pruebas con Jest + Supertest.
+- Node.js 22.x y npm 10.x (solo si ejecutaras fuera de Docker).
+- Docker Desktop (o Docker Engine + Docker Compose v2) para usar el stack incluido.
+- Instancia MySQL 8 si decides no usar el contenedor `db` del compose.
 
 ## Configuracion de variables de entorno
 
 1. Copia el archivo de ejemplo: `cp .env.example .env`.
-2. Ajusta los valores:
-   - Con Docker usa `DB_HOST=db`, `DB_USER=usuario`, `DB_PASSWORD=password` y `DB_NAME=tarjeta_joven` (coinciden con `docker-compose.yml`).
-   - Para ejecucion local apunta `DB_HOST` y el resto de credenciales a tu propia base.
-3. Define `JWT_SECRET` y `JWT_EXPIRATION` conforme a tus politicas de seguridad.
+2. Ajusta los valores segun tu entorno (ver tabla). Si usas Docker apunta `DB_HOST=db`.
+3. Define `JWT_SECRET` y `JWT_EXPIRATION` acorde a tus politicas.
+
+| Variable | Descripcion | Valor sugerido |
+|----------|-------------|----------------|
+| `PORT` | Puerto del API. | `8080` |
+| `FRONTEND_ORIGIN` | Origen permitido en CORS. | `http://localhost:3000` |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Credenciales MySQL. | Usa `db` y las credenciales del compose si estas en Docker. |
+| `DB_URI` | Alternativa para definir la conexion en una sola cadena. | `mysql://user:pass@host:3306/tarjeta_joven` |
+| `JWT_SECRET` | Clave para firmar tokens. | Cadena aleatoria y larga. |
+| `JWT_EXPIRATION` | Tiempo de vida del access token. | `15m` (o lo que prefieras). |
 
 ## Ejecucion local (sin Docker)
 
@@ -35,94 +55,88 @@ Necesitas un servidor MySQL accesible y las variables del `.env` apuntando a dic
 
 ## Ejecucion con Docker
 
-1. Verifica que `.env` ya exista en la raiz del proyecto.
+1. Asegura que `.env` exista en la raiz.
 2. Levanta los servicios:
 
    ```bash
    docker compose up -d --build
    ```
 
-3. Revisa el estado: `docker compose ps` (deberias ver `backend_tj-db-1` y `backend_tj-api-1`).
-4. Sigue los logs de la API cuando lo necesites: `docker compose logs -f api`.
-5. Para apagar el stack: `docker compose down` (agrega `-v` si quieres borrar el volumen `db_data`).
+3. Verifica el estado (`docker compose ps`) y sigue logs cuando lo necesites (`docker compose logs -f api`).
+4. Para apagar el stack: `docker compose down` (agrega `-v` si quieres borrar el volumen `db_data`).
 
-## Seeders y datos de ejemplo
+## Base de datos y datos de ejemplo
 
-Ejecuta el script de seeders para crear el esquema minimo y poblar la base con municipios, categorias, beneficios, usuarios y solicitudes de registro de prueba:
+`scripts/seed.js` crea todas las tablas (`usuarios`, `cardholders`, `solicitudes_registro`, `beneficios`, `otp_codes`, etc.) y carga catalogos + casos de prueba.
 
 ```bash
 npm run seed
-# o si ya tienes el stack de Docker corriendo:
+# o si el stack Docker ya esta corriendo
 docker compose exec api node scripts/seed.js
 ```
 
-El script es idempotente y toma las credenciales desde las mismas variables de entorno de la app, por lo que tambien funciona con la base remota configurada en `DB_URI`. Una vez ejecutado, puedes iniciar sesion con:
+El script es idempotente y usa las credenciales del `.env`. Cuentas y recursos precargados:
 
-- Usuario: `ana.hernandez@example.com`
-- Password: `Test1234!`
-- Cardholder sin cuenta asociada para pruebas del nuevo flujo: CURP `MELR000202MBCSRD06`.
+| Alias | Email | CURP | Password | Municipio | Telefono |
+|-------|-------|------|----------|-----------|----------|
+| Ana | `ana.hernandez@example.com` | `HERL020101MBCNRZ01` | `Test1234!` | Tijuana | 6641234567 |
+| Carlos | `carlos.lopez@example.com` | `LOMC990505HBCLPM02` | `Secret456!` | Mexicali | 6869876543 |
+| Maria | `maria.soto@example.com` | `SOAM010910MBCSGR03` | `Password789!` | Ensenada | 6465551122 |
 
-## Vinculacion de tarjeta fisica
+Tarjetahabientes relevantes:
 
-El flujo **"Ya tengo tarjeta fisica"** queda expuesto bajo `/api/v1/cardholders`:
+- `MELR000202MBCSRD06`: activo sin cuenta (usa este para probar `lookup` + `account`).
+- `HERL020101MBCNRZ01`: activo con cuenta (responde `409` en lookup).
+- `SAQP950101HBCQRP07`: tarjeta inactiva (responde `404`).
 
-1. `POST /api/v1/cardholders/lookup`
-   - Body: `{ "curp": "ABCD001122HDFRRN07" }`.
-   - Respuesta `200`: datos basicos (`curp`, `nombres`, `apellidos`, `municipio`, `hasAccount`).
-   - Errores: `422` formato CURP, `404` cuando no exista/este inactiva, `409` si ya tiene cuenta, `429` al exceder intentos (5 cada 15 minutos; se bloquea por otros 15).
-   - Si es exitoso, abre una ventana de 15 minutos (`pending_account_until`) para crear la cuenta.
+Solicitudes iniciales (`solicitudes_registro`): `SAQF030415MBCSLQ04` (pending) y `CATL021102HBCCMT05` (approved).
 
-2. `POST /api/v1/cardholders/{curp}/account`
-   - Body:
-     ```json
-     {
-       "username": "usuario.tj",
-       "password": "TuPassword123",
-       "confirmPassword": "TuPassword123"
-     }
-     ```
-   - Validaciones: nombre de usuario 4-50 caracteres alfanumericos (`.` `_` `-` permitidos), contraseña >= 8 con letras y numeros y confirmacion identica.
-   - Errores: `404` si la tarjeta no paso lookup vigente, `409` si ya existe cuenta, `422` por formato, `500` en errores internos.
-   - Respuesta `201`: `{"message":"Cuenta creada. Ya puedes iniciar sesion."}`.
+## Flujos expuestos y forma de invocarlos
 
-Cada llamada queda registrada en `cardholder_audit_logs` (CURP, IP, timestamp) y el “lookup” vuelve a ser necesario si la ventana expira. Para pruebas manuales puedes usar el cardholder `MELR000202MBCSRD06` (activo sin cuenta) o verificar la respuesta `409` usando `HERL020101MBCNRZ01` (ya vinculado).
+Todos los endpoints estan versionados bajo `/api/v1`. A continuacion un resumen; revisa `readme_postman.md` para los payloads completos y scripts de pruebas.
+
+### Autenticacion estandar
+
+- `POST /auth/login` recibe `{ "username": "<email o curp>", "password": "<password>" }` y regresa `accessToken` + `refreshToken`.
+- `POST /auth/logout` (Bearer token) elimina los refresh tokens asociados.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"ana.hernandez@example.com","password":"Test1234!"}'
+```
+
+### Autenticacion con OTP
+
+- `POST /auth/otp/send` genera un codigo de 6 digitos valido por 5 minutos y lo devuelve en la respuesta.
+- `POST /auth/otp/verify` valida `curp` + `otp` y emite tokens nuevos.
+
+### Perfil de usuario
+
+- `GET /me` requiere `Authorization: Bearer <accessToken>` y devuelve nombre, apellidos, CURP, email, municipio y telefono.
+
+### Catalogo de beneficios
+
+- `GET /catalog` admite filtros `municipio`, `categoria`, `q` y paginacion (`page`, `pageSize`). Responde con `{ items, total, totalPages }`.
+
+### Vinculacion de tarjeta fisica
+
+- `POST /cardholders/lookup`: valida CURP, aplica rate limit (5 intentos en 15 minutos) y abre una ventana de 15 minutos para crear cuenta (`pending_account_until`).
+- `POST /cardholders/{curp}/account`: crea un usuario usando los datos del cardholder si la ventana sigue vigente y el username cumple el regex (`^[A-Za-z0-9._-]{4,50}$`).
+
+### Registro de ciudadanos sin tarjeta
+
+- `POST /register` (alias `POST /register/register`) recibe multipart/form-data con los campos personales. Los archivos `ine`, `comprobante` y `curpDoc` son ahora opcionales y no se requieren para crear la solicitud; si se envian, se siguen eliminando cuando ocurre un error de validacion.
 
 ## Probar el API con Postman
 
-1. **Crear entorno**: en Postman abre *Environments* y agrega uno nuevo con la variable `baseUrl = http://localhost:8080/api/v1`.
-2. **Catalogo**:
-   - Metodo: `GET`
-   - URL: `{{baseUrl}}/catalog`
-   - Respuesta esperada: lista paginada (si la base esta vacia devolvera items vacios).
-3. **Login** (requiere un registro previo en la tabla `usuarios`):
-   - Metodo: `POST`
-   - URL: `{{baseUrl}}/auth/login`
-   - Body (JSON):
-     ```json
-     {
-       "username": "correo@ejemplo.com",
-       "password": "TuPassword"
-     }
-     ```
-   - Guarda el `accessToken` de la respuesta en una variable Postman llamada `accessToken`.
-4. **Perfil del usuario**:
-   - Metodo: `GET`
-   - URL: `{{baseUrl}}/me`
-   - Header: `Authorization: Bearer {{accessToken}}`.
-5. **Registro con archivos**:
-   - Metodo: `POST`
-   - URL: `{{baseUrl}}/register`
-   - Body: `multipart/form-data`.
-   - Campos de texto: `nombres`, `apellidos`, `fechaNacimiento`, `curp`, `colonia`, `password`.
-   - Campos de archivo: `ine`, `comprobante`, `curpDoc` (usa la opcion *File* en Postman).
-
-> Consejo: guarda las solicitudes dentro de una coleccion y versiona el archivo exportado para mantener el flujo de pruebas compartido con el equipo.
+Consulta `readme_postman.md` para la guia paso a paso: configuracion de entorno, scripts de tests y dataset de referencia que coincide con `scripts/seed.js`.
 
 ## Scripts utiles
 
 - `npm run dev`: modo desarrollo con recarga automatica (`nodemon`).
-- `npm start`: arranque en modo produccion (lo que corre el contenedor `api`).
-- `npm test`: ejecuta Jest con la base de datos mockeada.
+- `npm start`: arranque en modo produccion (el comando usado por el contenedor `api`).
+- `npm test`: ejecuta Jest con la base mockeada.
 - `npm run seed`: crea/actualiza las tablas minimas y datos de ejemplo.
 
 ## Endpoints principales
@@ -135,7 +149,8 @@ Todos los endpoints estan versionados bajo `/api/v1`:
 - `POST /auth/otp/verify`
 - `GET /me`
 - `GET /catalog`
-- `POST /register` (multipart/form-data)
+- `POST /register`
+- `POST /cardholders/lookup`
+- `POST /cardholders/{curp}/account`
 
-Consulta el documento funcional del frontend para conocer los contratos completos (payloads y codigos de respuesta esperados).
-
+> Mantener `readme_postman.md` junto a tu coleccion exportada ayuda a documentar respuestas, variables y datos de prueba compartidos con el equipo.

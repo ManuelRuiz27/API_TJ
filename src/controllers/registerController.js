@@ -5,7 +5,9 @@ const db = require('../config/db');
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'application/pdf']);
-const CURP_REGEX = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[0-9A-Z]{2}$/;
+// CURP con validacion reforzada: estructura oficial, fecha y entidad federativa
+const CURP_REGEX =
+  /^[A-Z][AEIOUX][A-Z]{2}\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])[HM](?:AS|BC|BS|CC|CL|CM|CS|CH|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[0-9A-Z]\d$/;
 const NUMERO_REGEX = /^(\d{1,5}[A-Za-z0-9]{0,4}|S\/?N)$/i;
 const CP_REGEX = /^\d{5}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -74,6 +76,59 @@ function parseFechaNacimiento(value) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function calculateAgeFromISODate(isoDateString) {
+  if (typeof isoDateString !== 'string') {
+    return null;
+  }
+
+  const [yearStr, monthStr, dayStr] = isoDateString.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  const hasNotHadBirthdayYet =
+    today.getMonth() + 1 < month ||
+    (today.getMonth() + 1 === month && today.getDate() < day);
+
+  if (hasNotHadBirthdayYet) {
+    age -= 1;
+  }
+
+  return age;
+}
+
+function extractBirthDateFromCurp(curp) {
+  if (typeof curp !== 'string' || !CURP_REGEX.test(curp)) {
+    return null;
+  }
+
+  const year = Number(curp.slice(4, 6));
+  const month = Number(curp.slice(6, 8));
+  const day = Number(curp.slice(8, 10));
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+
+  const now = new Date();
+  const currentTwoDigits = now.getFullYear() % 100;
+  const century = year <= currentTwoDigits ? 2000 : 1900;
+  const fullYear = century + year;
+
+  const date = new Date(fullYear, month - 1, day);
+  if (date.getFullYear() !== fullYear || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+
+  return { year: fullYear, month, day };
+}
+
 async function cleanupUploadedFiles(files = {}) {
   const pending = [];
   for (const field of Object.values(files)) {
@@ -136,6 +191,39 @@ exports.register = async (req, res) => {
   if (!fechaISO) {
     return rejectRequest(res, 422, 'fechaNacimiento debe tener formato DD/MM/AAAA valido', req.files);
   }
+  const age = calculateAgeFromISODate(fechaISO);
+  if (age === null || age < 0) {
+    return rejectRequest(res, 422, 'La fecha de nacimiento es invalida', req.files);
+  }
+  if (age > 29) {
+    return rejectRequest(
+      res,
+      422,
+      'La edad maxima permitida para el tramite es de 29 anos cumplidos',
+      req.files
+    );
+  }
+
+  const curpBirth = extractBirthDateFromCurp(rawCurp);
+  if (!curpBirth) {
+    return rejectRequest(res, 422, 'El CURP tiene un formato invalido', req.files);
+  }
+  const [birthYearStr, birthMonthStr, birthDayStr] = fechaISO.split('-');
+  const birthYear = Number(birthYearStr);
+  const birthMonth = Number(birthMonthStr);
+  const birthDay = Number(birthDayStr);
+  if (
+    curpBirth.year !== birthYear ||
+    curpBirth.month !== birthMonth ||
+    curpBirth.day !== birthDay
+  ) {
+    return rejectRequest(
+      res,
+      422,
+      'La fecha de nacimiento no coincide con la codificada en el CURP',
+      req.files
+    );
+  }
   if (calle.length < 2) {
     return rejectRequest(res, 422, 'La calle debe tener al menos 2 caracteres', req.files);
   }
@@ -175,10 +263,9 @@ exports.register = async (req, res) => {
   const ineFile = req.files?.ine?.[0];
   const comprobanteFile = req.files?.comprobante?.[0];
   const curpDocFile = req.files?.curpDoc?.[0];
-
-  if (!ineFile || !comprobanteFile || !curpDocFile) {
-    return rejectRequest(res, 422, 'Debes adjuntar INE, comprobante y CURP digital', req.files);
-  }
+  const ineFilename = ineFile?.filename || null;
+  const comprobanteFilename = comprobanteFile?.filename || null;
+  const curpDocFilename = curpDocFile?.filename || null;
 
   try {
     const [existingUser] = await db.execute(
@@ -231,9 +318,9 @@ exports.register = async (req, res) => {
         colonia,
         hashedPassword,
         aceptaTerminos ? 1 : 0,
-        ineFile.filename,
-        comprobanteFile.filename,
-        curpDocFile.filename
+        ineFilename,
+        comprobanteFilename,
+        curpDocFilename
       ]
     );
 
