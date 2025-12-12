@@ -1,7 +1,8 @@
-﻿const multer = require('multer');
+const multer = require('multer');
 const bcrypt = require('bcrypt');
 const fs = require('fs/promises');
 const db = require('../config/db');
+const { ensureUploadsDir } = require('../config/uploads');
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'application/pdf']);
@@ -14,10 +15,12 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 const SALT_ROUNDS = 10;
 
+const UPLOADS_DIR = ensureUploadsDir();
+
 // Configuracion de multer para manejar multiples archivos y validar el tipo
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, UPLOADS_DIR);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + file.originalname;

@@ -20,7 +20,7 @@ API de referencia para el programa Tarjeta Joven. Expone flujos de autenticacion
 | `src/controllers/*` | Logica de cada flujo: tokens, OTP, catalogo, registro y cardholders. |
 | `src/middleware/auth.js` | Middleware que valida JWT y expone `req.user`. |
 | `scripts/seed.js` | Asegura el esquema y siembra municipios, categorias, beneficios, usuarios, cardholders y solicitudes. |
-| `uploads/` | Carpeta (o volumen) donde `multer` guarda, de forma opcional, los adjuntos del registro si se envian. |
+| `uploads/` | Carpeta default para adjuntos del registro (configurable via `UPLOADS_DIR`). |
 | `tests/` | Base para pruebas Jest + Supertest. |
 
 ## Requisitos previos
@@ -43,6 +43,7 @@ API de referencia para el programa Tarjeta Joven. Expone flujos de autenticacion
 | `DB_URI` | Alternativa para definir la conexion en una sola cadena. | `mysql://user:pass@host:3306/tarjeta_joven` |
 | `JWT_SECRET` | Clave para firmar tokens. | Cadena aleatoria y larga. |
 | `JWT_EXPIRATION` | Tiempo de vida del access token. | `15m` (o lo que prefieras). |
+| `UPLOADS_DIR` | Directorio donde se guardan los archivos subidos (multer). | `uploads/` |
 
 ## Ejecucion local (sin Docker)
 
@@ -52,6 +53,12 @@ npm run dev
 ```
 
 Necesitas un servidor MySQL accesible y las variables del `.env` apuntando a dicha instancia.
+
+## Deploy en Render (sin Docker)
+
+- El filesystem es efimero: no asumas que `uploads/` persiste entre deploys/restarts.
+- Recomendado: usar storage externo (S3 / Cloudflare R2) y guardar solo la URL/metadata en la BD.
+- Alternativa: usar Render Disk y apuntar `UPLOADS_DIR` a un path persistente, por ejemplo `UPLOADS_DIR=/data/uploads`.
 
 ## Ejecucion con Docker
 

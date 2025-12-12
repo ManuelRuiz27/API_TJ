@@ -24,6 +24,12 @@ jest.mock('../src/config/db', () => {
 const app = require('../src/index');
 
 describe('Pruebas de API', () => {
+  test('GET /health responde con 200 { ok: true }', async () => {
+    const res = await request(app).get('/health');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+  });
+
   test('GET /api/v1/catalog responde con 200 y estructura de lista', async () => {
     const res = await request(app).get('/api/v1/catalog');
     expect(res.statusCode).toBe(200);

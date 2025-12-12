@@ -313,7 +313,7 @@ Errores comunes:
 - `422` si algun campo no cumple los requisitos (fecha invalida, password debil, CP incorrecto, archivos sin formato permitido o >2 MB).
 - `400` si faltan campos obligatorios antes de validar el resto.
 
-> Si una validacion falla, el backend elimina los archivos ya subidos para evitar basura en `uploads/`.
+> Si una validacion falla, el backend elimina los archivos ya subidos para evitar basura en el directorio de uploads (`UPLOADS_DIR`, default `uploads/`).
 
 ---
 
